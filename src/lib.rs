@@ -29,6 +29,7 @@ impl event::Guest for MyPlugin {
             EventType::ProviderAction => {}
             EventType::DeeplinkAction => {}
             EventType::TransportPacket => {}
+            EventType::Timer => {}
         };
 
         tracing::info!("event_payload: {}", event_payload);
