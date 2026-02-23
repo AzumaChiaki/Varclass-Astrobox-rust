@@ -511,27 +511,81 @@ pub fn delete_course(index: usize) {
     });
 }
 
+fn do_import(mut courses: Vec<Course>, ab_tag: Option<AbTagForApply>) -> usize {
+    normalize_and_deduplicate(&mut courses);
+    let count = courses.len();
+    with_state(|state| {
+        state.cached_courses = courses;
+        state.cached_ab_tag = ab_tag;
+        state.status = format!("已导入 {} 节课程", count);
+    });
+    count
+}
+
+pub fn import_with_format(text: &str, format: &str) -> Result<usize, String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("请输入要导入的内容".to_string());
+    }
+
+    let try_format = |fmt: &str| -> Result<usize, String> {
+        match fmt {
+            "cses" => {
+                let courses = crate::cses::import_from_cses(trimmed)?;
+                Ok(do_import(courses, None))
+            }
+            "wakeup" => {
+                let courses = crate::wakeup::import_from_wakeup(trimmed)?;
+                Ok(do_import(courses, None))
+            }
+            _ => import_from_json(trimmed),
+        }
+    };
+
+    // 先按用户选择的格式尝试
+    if let Ok(n) = try_format(format.trim().to_lowercase().as_str()) {
+        return Ok(n);
+    }
+
+    // 选择格式失败时，按内容特征自动尝试
+    // CSES: YAML，首行 version: 1，含 subjects/schedules
+    if (trimmed.starts_with("version") || trimmed.contains("\nversion"))
+        && trimmed.contains("subjects")
+        && trimmed.contains("schedules")
+    {
+        if let Ok(n) = try_format("cses") {
+            return Ok(n);
+        }
+    }
+    // WakeUp: 5 段 JSON，首段含 courseLen，第二段为节次表含 node/startTime
+    let first_line = trimmed.lines().next().unwrap_or("");
+    let blocks: Vec<&str> = trimmed.lines().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let looks_wakeup = blocks.len() >= 5
+        && (first_line.contains("courseLen")
+            || blocks.get(1).map(|b| b.contains("startTime") && b.contains("node")).unwrap_or(false));
+    if looks_wakeup {
+        if let Ok(n) = try_format("wakeup") {
+            return Ok(n);
+        }
+    }
+    // JSON: 以 { 或 [ 开头的单段 JSON
+    let first_char = trimmed.chars().next().unwrap_or(' ');
+    if first_char == '{' || first_char == '[' {
+        if let Ok(n) = try_format("json") {
+            return Ok(n);
+        }
+    }
+
+    Err("无法解析：请确认格式选择正确（JSON/CSES/WakeUp），或检查内容是否完整".to_string())
+}
+
 pub fn import_from_json(text: &str) -> Result<usize, String> {
-    if let Some((mut courses, ab_tag)) = parse_timetable_data(text) {
-        normalize_and_deduplicate(&mut courses);
-        let count = courses.len();
-        with_state(|state| {
-            state.cached_courses = courses;
-            state.cached_ab_tag = ab_tag;
-            state.status = format!("已导入 {} 节课程", count);
-        });
-        Ok(count)
+    if let Some((courses, ab_tag)) = parse_timetable_data(text) {
+        Ok(do_import(courses, ab_tag))
     } else {
         // Try parsing as simple array of courses if not timetableData format
         if let Ok(courses_arr) = serde_json::from_str::<Vec<Course>>(text) {
-             let mut courses = courses_arr;
-             normalize_and_deduplicate(&mut courses);
-             let count = courses.len();
-             with_state(|state| {
-                state.cached_courses = courses;
-                state.status = format!("已导入 {} 节课程", count);
-             });
-             Ok(count)
+            Ok(do_import(courses_arr, None))
         } else {
             Err("无法解析课程数据，请确保格式正确".to_string())
         }

@@ -2,30 +2,18 @@ use crate::astrobox::psys_host::ui;
 use crate::model::Course;
 use crate::sync;
 use crate::ui::event_handler::*;
-use crate::ui::state::{ui_state, CourseForm, TabType, UiState};
+use crate::ui::state::{ui_state, CourseForm, ImportFormat, TabType, UiState};
 
 fn msg_element(state: &UiState) -> Option<ui::Element> {
     state.message.as_ref().map(|(text, is_error)| {
         ui::Element::new(ui::ElementType::Div, None)
+            .width_full()
             .bg(if *is_error { "#6B1D1D" } else { "#1F4D1F" })
             .radius(8)
             .padding(10)
             .margin_bottom(10)
             .child(ui::Element::new(ui::ElementType::P, Some(text)).text_color("#FFFFFF"))
     })
-}
-
-fn debug_element(state: &UiState) -> Option<ui::Element> {
-    if state.last_event.is_empty() {
-        None
-    } else {
-        Some(
-            ui::Element::new(ui::ElementType::P, Some(&state.last_event))
-                .size(11)
-                .text_color("#999999")
-                .margin_bottom(8),
-        )
-    }
 }
 
 fn tab_button(label: &str, event_id: &str, active: bool) -> ui::Element {
@@ -40,12 +28,14 @@ fn tab_button(label: &str, event_id: &str, active: bool) -> ui::Element {
 
 fn form_input(label: &str, value: &str, event_id: &str) -> ui::Element {
     ui::Element::new(ui::ElementType::Div, None)
+        .width_full()
         .margin_bottom(10)
         .child(ui::Element::new(ui::ElementType::P, Some(label)).margin_bottom(4))
         .child(
             ui::Element::new(ui::ElementType::Input, Some(value))
                 .on(ui::Event::Change, event_id)
                 .on(ui::Event::Input, event_id)
+                .width_full()
                 .bg("#2A2A2A")
                 .radius(8)
                 .padding(8),
@@ -75,6 +65,7 @@ fn form_from_course(course: &Course) -> CourseForm {
 
 fn add_tab_ui(state: &UiState) -> ui::Element {
     ui::Element::new(ui::ElementType::Div, None)
+        .width_full()
         .child(form_input("星期(1-7)", &state.add_form.day, INPUT_ADD_DAY))
         .child(form_input("课程名", &state.add_form.name, INPUT_ADD_NAME))
         .child(form_input("教室", &state.add_form.room, INPUT_ADD_ROOM))
@@ -102,6 +93,7 @@ fn course_select(state: &UiState, courses: &[Course]) -> ui::Element {
 
     let mut sel = ui::Element::new(ui::ElementType::Select, Some(&selected_text))
         .on(ui::Event::Change, EVENT_SELECT_COURSE)
+        .width_full()
         .bg("#2A2A2A")
         .radius(8)
         .padding(8)
@@ -118,6 +110,7 @@ fn course_select(state: &UiState, courses: &[Course]) -> ui::Element {
 fn manage_tab_ui(state: &UiState) -> ui::Element {
     let courses = sync::get_cached_courses();
     let mut root = ui::Element::new(ui::ElementType::Div, None)
+        .width_full()
         .child(
             ui::Element::new(ui::ElementType::Div, None)
                 .flex()
@@ -146,10 +139,46 @@ fn manage_tab_ui(state: &UiState) -> ui::Element {
     )
 }
 
+fn import_format_select(state: &UiState) -> ui::Element {
+    let format_label = match state.import_format {
+        ImportFormat::Json => "JSON",
+        ImportFormat::Cses => "CSES (YAML)",
+        ImportFormat::Wakeup => "WakeUp",
+    };
+    let mut sel = ui::Element::new(ui::ElementType::Select, Some(format_label))
+        .on(ui::Event::Change, crate::ui::event_handler::INPUT_IMPORT_FORMAT)
+        .width_full()
+        .bg("#2A2A2A")
+        .radius(8)
+        .padding(8)
+        .margin_bottom(10);
+    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("JSON")));
+    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("CSES (YAML)")));
+    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("WakeUp")));
+    sel
+}
+
 fn import_tab_ui(state: &UiState) -> ui::Element {
+    let hint = match state.import_format {
+        ImportFormat::Json => "粘贴 JSON 课程配置后导入",
+        ImportFormat::Cses => "粘贴 CSES YAML 课表后导入",
+        ImportFormat::Wakeup => "粘贴 WakeUp 多段 JSON 文本后导入",
+    };
     ui::Element::new(ui::ElementType::Div, None)
+        .width_full()
         .child(
-            ui::Element::new(ui::ElementType::P, Some("粘贴课程配置(JSON)后导入"))
+            ui::Element::new(ui::ElementType::Div, None)
+                .width_full()
+                .margin_bottom(6)
+                .child(
+                    ui::Element::new(ui::ElementType::P, Some("解析格式"))
+                        .text_color("#BBBBBB")
+                        .margin_bottom(4),
+                )
+                .child(import_format_select(state)),
+        )
+        .child(
+            ui::Element::new(ui::ElementType::P, Some(hint))
                 .text_color("#BBBBBB")
                 .margin_bottom(6),
         )
@@ -157,10 +186,11 @@ fn import_tab_ui(state: &UiState) -> ui::Element {
             ui::Element::new(ui::ElementType::Input, Some(&state.import_text))
                 .on(ui::Event::Change, INPUT_IMPORT_TEXT)
                 .on(ui::Event::Input, INPUT_IMPORT_TEXT)
+                .width_full()
+                .height_full()
                 .bg("#2A2A2A")
                 .radius(8)
                 .padding(8)
-                .height(180)
                 .margin_bottom(10),
         )
         .child(
@@ -179,17 +209,16 @@ pub fn build_main_ui() -> ui::Element {
     let mut root = ui::Element::new(ui::ElementType::Div, None)
         .flex()
         .flex_direction(ui::FlexDirection::Column)
+        .width_full()
         .padding(16);
 
     if let Some(m) = msg_element(&state) {
         root = root.child(m);
     }
-    if let Some(d) = debug_element(&state) {
-        root = root.child(d);
-    }
 
     let tabs = ui::Element::new(ui::ElementType::Div, None)
         .flex()
+        .width_full()
         .margin_bottom(12)
         .child(tab_button(
             "添加课程",

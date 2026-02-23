@@ -7,6 +7,33 @@ pub enum TabType {
     Import,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportFormat {
+    Json,
+    Cses,
+    Wakeup,
+}
+
+impl ImportFormat {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImportFormat::Json => "json",
+            ImportFormat::Cses => "cses",
+            ImportFormat::Wakeup => "wakeup",
+        }
+    }
+    pub fn from_str(s: &str) -> Self {
+        let s = s.trim().to_lowercase();
+        if s.contains("cses") {
+            ImportFormat::Cses
+        } else if s.contains("wakeup") {
+            ImportFormat::Wakeup
+        } else {
+            ImportFormat::Json
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CourseForm {
     pub day: String,
@@ -25,8 +52,8 @@ pub struct UiState {
     pub edit_form: CourseForm,
     pub selected_index: Option<usize>,
     pub import_text: String,
+    pub import_format: ImportFormat,
     pub message: Option<(String, bool)>,
-    pub last_event: String,
 }
 
 impl Default for UiState {
@@ -52,8 +79,8 @@ impl Default for UiState {
             },
             selected_index: None,
             import_text: String::new(),
+            import_format: ImportFormat::Json,
             message: None,
-            last_event: String::new(),
         }
     }
 }

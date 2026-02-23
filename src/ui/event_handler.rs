@@ -2,7 +2,7 @@ use crate::astrobox::psys_host::ui;
 use crate::model::Course;
 use crate::sync;
 use crate::ui::build::{fill_edit_form_by_index, refresh_main_ui};
-use crate::ui::state::{ui_state, CourseForm, TabType};
+use crate::ui::state::{ui_state, CourseForm, ImportFormat, TabType};
 
 pub const EVENT_TAB_ADD: &str = "tab_add";
 pub const EVENT_TAB_MANAGE: &str = "tab_manage";
@@ -31,6 +31,7 @@ pub const INPUT_EDIT_END: &str = "input_edit_end";
 pub const INPUT_EDIT_WEEK_TYPE: &str = "input_edit_week_type";
 
 pub const INPUT_IMPORT_TEXT: &str = "input_import_text";
+pub const INPUT_IMPORT_FORMAT: &str = "input_import_format";
 
 fn parse_input_value(payload: &str) -> String {
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(payload) {
@@ -86,18 +87,6 @@ fn parse_form(form: &CourseForm) -> Result<Course, String> {
         end,
         week_type: Course::normalize_week_type(Some(form.week_type.as_str())),
     })
-}
-
-fn set_debug(evtype: ui::Event, event_id: &str, payload: &str) {
-    let mut payload_text = payload.replace('\n', " ");
-    if payload_text.len() > 80 {
-        payload_text.truncate(80);
-        payload_text.push_str("...");
-    }
-    let mut state = ui_state()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    state.last_event = format!("事件: {:?} | id: {} | payload: {}", evtype, event_id, payload_text);
 }
 
 pub fn set_status_message(message: String, is_error: bool) {
@@ -200,13 +189,13 @@ fn handle_click(event_id: &str) {
             set_status_message("课程已删除".to_string(), false);
         }
         EVENT_IMPORT_PASTE => {
-            let text = {
+            let (text, format) = {
                 let state = ui_state()
                     .read()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                state.import_text.clone()
+                (state.import_text.clone(), state.import_format.as_str())
             };
-            match sync::import_from_json(&text) {
+            match sync::import_with_format(&text, format) {
                 Ok(count) => set_status_message(format!("导入成功，共 {} 节课程", count), false),
                 Err(e) => set_status_message(format!("导入失败: {}", e), true),
             }
@@ -296,6 +285,12 @@ fn handle_change(event_id: &str, payload: &str) {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             state.import_text = value;
         }
+        INPUT_IMPORT_FORMAT => {
+            let mut state = ui_state()
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.import_format = ImportFormat::from_str(&value);
+        }
         EVENT_SELECT_COURSE => {
             let idx_opt = value
                 .split_whitespace()
@@ -318,7 +313,6 @@ pub fn ui_event_processor(evtype: ui::Event, event_id: &str, event_payload: &str
         &resolved_event_id
     };
 
-    set_debug(evtype, event_id_ref, event_payload);
     match evtype {
         ui::Event::Click | ui::Event::PointerUp => handle_click(event_id_ref),
         ui::Event::Change | ui::Event::Input => handle_change(event_id_ref, event_payload),

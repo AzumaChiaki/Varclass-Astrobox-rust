@@ -6,10 +6,12 @@ use crate::exports::astrobox::psys_plugin::{
     lifecycle,
 };
 
+pub mod cses;
 pub mod logger;
 pub mod model;
 pub mod sync;
 pub mod ui;
+pub mod wakeup;
 
 wit_bindgen::generate!({
     path: "wit",
@@ -79,14 +81,6 @@ impl event::Guest for MyPlugin {
             "host.on_ui_event -> event={:?}, id={}, payload={}",
             event, event_id, event_payload
         ));
-
-        if matches!(
-            event,
-            event::Event::Click | event::Event::PointerUp | event::Event::PointerDown
-        ) {
-            ui::set_status_message(format!("收到点击事件: {:?}, id={}", event, event_id), false);
-            ui::refresh_main_ui();
-        }
 
         ui::ui_event_processor(event, &event_id, &event_payload);
 
