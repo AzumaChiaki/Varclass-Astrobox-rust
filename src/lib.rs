@@ -1,4 +1,5 @@
 use wit_bindgen::FutureReader;
+use serde_json::Value;
 
 use crate::exports::astrobox::psys_plugin::{
     event::{self, EventType},
@@ -6,8 +7,9 @@ use crate::exports::astrobox::psys_plugin::{
 };
 
 pub mod logger;
+pub mod model;
+pub mod sync;
 pub mod ui;
-pub mod resources;
 
 wit_bindgen::generate!({
     path: "wit",
@@ -17,22 +19,47 @@ wit_bindgen::generate!({
 
 struct MyPlugin;
 
+fn extract_payload_text(payload: &str) -> String {
+    if let Ok(json) = serde_json::from_str::<Value>(payload) {
+        if let Some(text) = json.get("payloadText").and_then(|v| v.as_str()) {
+            return text.to_string();
+        }
+        if let Some(payload_value) = json.get("payload") {
+            if let Some(text) = payload_value.as_str() {
+                return text.to_string();
+            }
+            return payload_value.to_string();
+        }
+    }
+    payload.to_string()
+}
+
 impl event::Guest for MyPlugin {
-    #[allow(async_fn_in_trait)]
     fn on_event(event_type: EventType, event_payload: _rt::String) -> FutureReader<String> {
         let (writer, reader) = wit_future::new::<String>(|| "".to_string());
 
         match event_type {
-            EventType::PluginMessage => {}
-            EventType::InterconnectMessage => {}
-            EventType::DeviceAction => {}
-            EventType::ProviderAction => {}
-            EventType::DeeplinkAction => {}
-            EventType::TransportPacket => {}
-            EventType::Timer => {}
-        };
+            EventType::InterconnectMessage => {
+                if let Err(e) = sync::handle_interconnect_message(&event_payload) {
+                    logger::warn(format!("handle_interconnect_message error: {}", e));
+                    ui::set_status_message(format!("接收手环课程失败: {}", e), true);
+                    ui::refresh_main_ui();
+                } else {
+                    ui::set_status_message("已获取手环课程，可在“课程管理”中预览和编辑".to_string(), false);
+                    ui::refresh_main_ui();
+                }
+            }
+            EventType::Timer => {
+                let payload = extract_payload_text(&event_payload);
+                logger::info(format!("timer event payload={}", payload));
+            }
+            _ => {}
+        }
 
-        tracing::info!("event_payload: {}", event_payload);
+        logger::info(format!(
+            "host.on_event -> type={:?}, payload={}",
+            event_type, event_payload
+        ));
 
         wit_bindgen::spawn(async move {
             let _ = writer.write("".to_string()).await;
@@ -44,20 +71,33 @@ impl event::Guest for MyPlugin {
     fn on_ui_event(
         event_id: _rt::String,
         event: event::Event,
-        _event_payload: _rt::String,
-    ) -> wit_bindgen::rt::async_support::FutureReader<_rt::String> {
+        event_payload: _rt::String,
+    ) -> FutureReader<_rt::String> {
         let (writer, reader) = wit_future::new::<String>(|| "".to_string());
 
-        ui::ui_event_processor(event, &event_id);
+        logger::info(format!(
+            "host.on_ui_event -> event={:?}, id={}, payload={}",
+            event, event_id, event_payload
+        ));
+
+        if matches!(
+            event,
+            event::Event::Click | event::Event::PointerUp | event::Event::PointerDown
+        ) {
+            ui::set_status_message(format!("收到点击事件: {:?}, id={}", event, event_id), false);
+            ui::refresh_main_ui();
+        }
+
+        ui::ui_event_processor(event, &event_id, &event_payload);
 
         wit_bindgen::spawn(async move {
-            let _ = writer.write("".to_string()).await;
+            let _ = writer.write("ok".to_string()).await;
         });
 
         reader
     }
 
-    fn on_ui_render(element_id: _rt::String) -> wit_bindgen::rt::async_support::FutureReader<()> {
+    fn on_ui_render(element_id: _rt::String) -> FutureReader<()> {
         let (writer, reader) = wit_future::new::<()>(|| ());
 
         ui::render_main_ui(&element_id);
@@ -69,7 +109,7 @@ impl event::Guest for MyPlugin {
         reader
     }
 
-    fn on_card_render(_card_id: _rt::String) -> wit_bindgen::rt::async_support::FutureReader<()> {
+    fn on_card_render(_card_id: _rt::String) -> FutureReader<()> {
         let (writer, reader) = wit_future::new::<()>(|| ());
 
         wit_bindgen::spawn(async move {
@@ -81,10 +121,15 @@ impl event::Guest for MyPlugin {
 }
 
 impl lifecycle::Guest for MyPlugin {
-    #[allow(async_fn_in_trait)]
-    fn on_load() -> () {
+    fn on_load() {
         logger::init();
-        tracing::info!("Hello AstroBox V2 Plugin!");
+        logger::info("plugin loaded");
+        wit_bindgen::spawn(async move {
+            logger::info("on_load register flow: scanning connected devices");
+             if let Err(e) = sync::bootstrap_sync().await {
+                 logger::warn(format!("bootstrap_sync failed: {}", e));
+             }
+        });
     }
 }
 

@@ -1,32 +1,45 @@
 use std::io::{self, Write};
+use std::sync::OnceLock;
 
-use tracing_appender::rolling;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+static LOGGER_INITED: OnceLock<()> = OnceLock::new();
+
 pub fn init() {
+    if LOGGER_INITED.get().is_some() {
+        return;
+    }
+
     let writer = move || PluginWriter(io::stdout());
     let console_layer = fmt::layer()
         .with_target(true)
-        .with_ansi(true)
+        .with_ansi(false)
         .with_file(true)
         .with_line_number(true)
         .with_writer(writer)
         .compact();
 
-    let file_appender = rolling::daily("logs", "app.log");
-    let file_layer = fmt::layer()
-        .with_target(true)
-        .with_ansi(false)
-        .with_file(true)
-        .with_line_number(true)
-        .with_writer(file_appender)
-        .compact();
-
-    // 注册所有 layer
-    tracing_subscriber::registry()
+    // 仅使用 stdout，不写入文件。WASI 插件沙箱可能无法创建 logs/ 目录，
+    // rolling::daily 会导致 panic 进而导致 "Plugin thread unexpectedly closed"
+    let result = tracing_subscriber::registry()
         .with(console_layer)
-        .with(file_layer)
-        .init();
+        .try_init();
+
+    if result.is_ok() {
+        let _ = LOGGER_INITED.set(());
+    }
+}
+
+pub fn info(message: impl AsRef<str>) {
+    tracing::info!("{}", message.as_ref());
+}
+
+pub fn warn(message: impl AsRef<str>) {
+    tracing::warn!("{}", message.as_ref());
+}
+
+pub fn error(message: impl AsRef<str>) {
+    tracing::error!("{}", message.as_ref());
 }
 
 struct PluginWriter<W: Write>(W);

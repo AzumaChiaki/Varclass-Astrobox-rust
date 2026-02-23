@@ -1,13 +1,22 @@
 {
-    "name": "Blank Template",
-    "icon": "icon.png",
-    "version": "1.0.0",
-    "description": "一个示例 AstroBox 插件",
-    "author": "AstroBox Team",
-    "website": "https://example.com",
-    "entry": "astrobox_ng_plugin_template_rust.wasm",
-    "wasi_version": 2,
-    "api_level": 2,
-    "permissions": ["network"],
-    "additional_files": []
+  "name": "Var课程表同步器",
+  "icon": "icon.png",
+  "version": "1.0.0",
+  "description": "同步Var课程表数据到设备",
+  "author": "AzumaChiaki",
+  "website": "https://github.com/azumachiaki",
+  "entry": "varclass_timetable.wasm",
+  "wasi_version": 2,
+  "api_level": 2,
+  "permissions": [
+    "device",
+    "interconnect",
+    "register_interconnect_recv",
+    "dialog",
+    "show_dialog",
+    "thirdpartyapp",
+    "get_thirdparty_app_list",
+    "launch_qa"
+  ],
+  "additional_files": []
 }
