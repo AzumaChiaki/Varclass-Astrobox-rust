@@ -120,9 +120,9 @@ impl lifecycle::Guest for MyPlugin {
         logger::info("plugin loaded");
         wit_bindgen::spawn(async move {
             logger::info("on_load register flow: scanning connected devices");
-             if let Err(e) = sync::bootstrap_sync().await {
-                 logger::warn(format!("bootstrap_sync failed: {}", e));
-             }
+            if let Err(e) = sync::bootstrap_sync().await {
+                logger::warn(format!("bootstrap_sync failed: {}", e));
+            }
         });
     }
 }

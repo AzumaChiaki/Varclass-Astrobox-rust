@@ -4,12 +4,25 @@ use crate::sync;
 use crate::ui::event_handler::*;
 use crate::ui::state::{ui_state, CourseForm, ImportFormat, TabType, UiState};
 
+const RADIUS: u32 = 24;
+const BUTTON_PADDING: u32 = 22;
+const BUTTON_FONT_SIZE: u32 = 15;
+const TAB_FONT_SIZE: u32 = 14;
+const INPUT_HEIGHT: u32 = 48;
+const INPUT_PADDING: u32 = 12;
+const COURSE_ITEM_PADDING: u32 = 24;
+// 0.15 透明 = 85% 不透明，alpha=0.85 → D9
+const BLUE_BUTTON: &str = "#0090FF26";  // #0090FF 0.15 透明
+const GRAY_BUTTON: &str = "#2A2A2AD9";  // 灰色 0.15 透明
+const GRAY_ACTIVE: &str = "#42424226";  // 激活态灰色 0.15 透明
+const GRAY_INPUT: &str = "#2A2A2AD9";   // 输入框背景 0.15 透明
+
 fn msg_element(state: &UiState) -> Option<ui::Element> {
     state.message.as_ref().map(|(text, is_error)| {
         ui::Element::new(ui::ElementType::Div, None)
             .width_full()
             .bg(if *is_error { "#6B1D1D" } else { "#1F4D1F" })
-            .radius(8)
+            .radius(RADIUS)
             .padding(10)
             .margin_bottom(10)
             .child(ui::Element::new(ui::ElementType::P, Some(text)).text_color("#FFFFFF"))
@@ -18,10 +31,11 @@ fn msg_element(state: &UiState) -> Option<ui::Element> {
 
 fn tab_button(label: &str, event_id: &str, active: bool) -> ui::Element {
     ui::Element::new(ui::ElementType::Button, Some(label))
-        .padding(10)
-        .margin_right(8)
-        .radius(8)
-        .bg(if active { "#424242" } else { "#2A2A2A" })
+        .width_full()
+        .padding(14)
+        .radius(RADIUS)
+        .size(TAB_FONT_SIZE)
+        .bg(if active { GRAY_ACTIVE } else { GRAY_BUTTON })
         .on(ui::Event::Click, event_id)
         .on(ui::Event::PointerUp, event_id)
 }
@@ -36,20 +50,27 @@ fn form_input(label: &str, value: &str, event_id: &str) -> ui::Element {
                 .on(ui::Event::Change, event_id)
                 .on(ui::Event::Input, event_id)
                 .width_full()
-                .bg("#2A2A2A")
-                .radius(8)
-                .padding(8),
+                .height(INPUT_HEIGHT)
+                .bg(GRAY_INPUT)
+                .radius(RADIUS)
+                .padding(INPUT_PADDING),
         )
 }
 
 fn action_button(label: &str, event_id: &str, primary: bool) -> ui::Element {
-    ui::Element::new(ui::ElementType::Button, Some(label))
-        .padding(10)
-        .radius(8)
-        .margin_right(8)
-        .bg(if primary { "#2B5BE8" } else { "#2A2A2A" })
-        .on(ui::Event::Click, event_id)
-        .on(ui::Event::PointerUp, event_id)
+    ui::Element::new(ui::ElementType::Div, None)
+        .width_half()
+        .margin_right(4)
+        .child(
+            ui::Element::new(ui::ElementType::Button, Some(label))
+                .width_full()
+                .padding(BUTTON_PADDING)
+                .radius(RADIUS)
+                .size(BUTTON_FONT_SIZE)
+                .bg(if primary { BLUE_BUTTON } else { GRAY_BUTTON })
+                .on(ui::Event::Click, event_id)
+                .on(ui::Event::PointerUp, event_id),
+        )
 }
 
 fn form_from_course(course: &Course) -> CourseForm {
@@ -84,41 +105,147 @@ fn add_tab_ui(state: &UiState) -> ui::Element {
         )
 }
 
-fn course_select(state: &UiState, courses: &[Course]) -> ui::Element {
-    let selected_text = state
-        .selected_index
-        .and_then(|idx| courses.get(idx))
-        .map(|c| c.display_name())
-        .unwrap_or_else(|| "请选择课程".to_string());
+const DAY_NAMES: [&str; 7] = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
-    let mut sel = ui::Element::new(ui::ElementType::Select, Some(&selected_text))
-        .on(ui::Event::Change, EVENT_SELECT_COURSE)
+fn day_button(day: u8, active: bool) -> ui::Element {
+    let label = DAY_NAMES.get((day as usize).saturating_sub(1)).unwrap_or(&"");
+    let event_id = format!("{}{}", crate::ui::event_handler::EVENT_DAY_PREFIX, day);
+    ui::Element::new(ui::ElementType::Button, Some(label))
         .width_full()
-        .bg("#2A2A2A")
-        .radius(8)
         .padding(8)
-        .margin_bottom(10);
+        .radius(RADIUS)
+        .size(14)
+        .bg(if active { GRAY_ACTIVE } else { GRAY_BUTTON })
+        .on(ui::Event::Click, &event_id)
+        .on(ui::Event::PointerUp, &event_id)
+}
 
-    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("请选择课程")));
-    for (idx, c) in courses.iter().enumerate() {
-        let text = format!("{} {}", idx + 1, c.display_name());
-        sel = sel.child(ui::Element::new(ui::ElementType::Option, Some(&text)));
-    }
-    sel
+fn course_list_item(course: &Course, index: usize, is_selected: bool) -> ui::Element {
+    let event_id = format!("{}{}", crate::ui::event_handler::EVENT_COURSE_PREFIX, index);
+    let text = format!("{} {}-{}节", course.display_name(), course.start, course.end);
+    ui::Element::new(ui::ElementType::Button, Some(&text))
+        .width_full()
+        .padding(COURSE_ITEM_PADDING)
+        .margin_bottom(8)
+        .radius(RADIUS)
+        .size(15)
+        .bg(if is_selected { GRAY_ACTIVE } else { GRAY_BUTTON })
+        .on(ui::Event::Click, &event_id)
+        .on(ui::Event::PointerUp, &event_id)
 }
 
 fn manage_tab_ui(state: &UiState) -> ui::Element {
     let courses = sync::get_cached_courses();
+    let selected_day = state.selected_day;
+
+    let day_buttons = ui::Element::new(ui::ElementType::Div, None)
+        .width_full()
+        .margin_bottom(12)
+        .child(
+            ui::Element::new(ui::ElementType::Div, None)
+                .flex()
+                .width_full()
+                .margin_bottom(4)
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .flex()
+                        .width_half()
+                        .margin_right(4)
+                        .child(
+                            ui::Element::new(ui::ElementType::Div, None)
+                                .width_half()
+                                .margin_right(4)
+                                .child(day_button(1, 1 == selected_day)),
+                        )
+                        .child(
+                            ui::Element::new(ui::ElementType::Div, None)
+                                .width_half()
+                                .child(day_button(2, 2 == selected_day)),
+                        ),
+                )
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .flex()
+                        .width_half()
+                        .margin_right(4)
+                        .child(
+                            ui::Element::new(ui::ElementType::Div, None)
+                                .width_half()
+                                .margin_right(4)
+                                .child(day_button(3, 3 == selected_day)),
+                        )
+                        .child(
+                            ui::Element::new(ui::ElementType::Div, None)
+                                .width_half()
+                                .child(day_button(4, 4 == selected_day)),
+                        ),
+                ),
+        )
+        .child(
+            ui::Element::new(ui::ElementType::Div, None)
+                .flex()
+                .width_full()
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .flex()
+                        .width_half()
+                        .margin_right(4)
+                        .child(
+                            ui::Element::new(ui::ElementType::Div, None)
+                                .width_half()
+                                .margin_right(4)
+                                .child(day_button(5, 5 == selected_day)),
+                        )
+                        .child(
+                            ui::Element::new(ui::ElementType::Div, None)
+                                .width_half()
+                                .child(day_button(6, 6 == selected_day)),
+                        ),
+                )
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .width_half()
+                        .child(day_button(7, 7 == selected_day)),
+                ),
+        );
+
+    let day_courses: Vec<(usize, &Course)> = courses
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.day == selected_day)
+        .collect();
+
+    // 课程列表：不设固定高度，随内容动态增长
+    let mut list = ui::Element::new(ui::ElementType::Div, None)
+        .width_full()
+        .flex()
+        .flex_direction(ui::FlexDirection::Column)
+        .margin_bottom(12);
+
+    for (idx, course) in &day_courses {
+        let is_selected = state.selected_index == Some(*idx);
+        list = list.child(course_list_item(course, *idx, is_selected));
+    }
+
+    if day_courses.is_empty() {
+        list = list.child(
+            ui::Element::new(ui::ElementType::P, Some("该日暂无课程"))
+                .text_color("#888888")
+                .margin_bottom(8),
+        );
+    }
+
     let mut root = ui::Element::new(ui::ElementType::Div, None)
         .width_full()
         .child(
             ui::Element::new(ui::ElementType::Div, None)
                 .flex()
                 .margin_bottom(10)
-                .child(action_button("从手环获取课程", EVENT_PULL_FROM_WATCH, true))
+                .child(action_button("从手环同步", EVENT_PULL_FROM_WATCH, true))
                 .child(action_button("推送到手环", EVENT_PUSH_TO_WATCH, false)),
         )
-        .child(course_select(state, &courses));
+        .child(day_buttons)
+        .child(list);
 
     root = root.child(form_input("星期(1-7)", &state.edit_form.day, INPUT_EDIT_DAY));
     root = root.child(form_input("课程名", &state.edit_form.name, INPUT_EDIT_NAME));
@@ -148,9 +275,10 @@ fn import_format_select(state: &UiState) -> ui::Element {
     let mut sel = ui::Element::new(ui::ElementType::Select, Some(format_label))
         .on(ui::Event::Change, crate::ui::event_handler::INPUT_IMPORT_FORMAT)
         .width_full()
-        .bg("#2A2A2A")
-        .radius(8)
-        .padding(8)
+        .height(INPUT_HEIGHT)
+        .bg(GRAY_INPUT)
+        .radius(RADIUS)
+        .padding(INPUT_PADDING)
         .margin_bottom(10);
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("JSON")));
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("CSES (YAML)")));
@@ -187,10 +315,10 @@ fn import_tab_ui(state: &UiState) -> ui::Element {
                 .on(ui::Event::Change, INPUT_IMPORT_TEXT)
                 .on(ui::Event::Input, INPUT_IMPORT_TEXT)
                 .width_full()
-                .height_full()
-                .bg("#2A2A2A")
-                .radius(8)
-                .padding(8)
+                .height(160)
+                .bg(GRAY_INPUT)
+                .radius(RADIUS)
+                .padding(INPUT_PADDING)
                 .margin_bottom(10),
         )
         .child(
@@ -216,25 +344,51 @@ pub fn build_main_ui() -> ui::Element {
         root = root.child(m);
     }
 
+    // 顶部三按钮各占 50%，分两行
     let tabs = ui::Element::new(ui::ElementType::Div, None)
-        .flex()
         .width_full()
         .margin_bottom(12)
-        .child(tab_button(
-            "添加课程",
-            EVENT_TAB_ADD,
-            state.current_tab == TabType::Add,
-        ))
-        .child(tab_button(
-            "课程管理",
-            EVENT_TAB_MANAGE,
-            state.current_tab == TabType::Manage,
-        ))
-        .child(tab_button(
-            "导入配置",
-            EVENT_TAB_IMPORT,
-            state.current_tab == TabType::Import,
-        ));
+        .child(
+            ui::Element::new(ui::ElementType::Div, None)
+                .flex()
+                .width_full()
+                .margin_bottom(4)
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .width_half()
+                        .margin_right(4)
+                        .child(tab_button(
+                            "添加课程",
+                            EVENT_TAB_ADD,
+                            state.current_tab == TabType::Add,
+                        )),
+                )
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .width_half()
+                        .child(tab_button(
+                            "课程管理",
+                            EVENT_TAB_MANAGE,
+                            state.current_tab == TabType::Manage,
+                        )),
+                ),
+        )
+        .child(
+            ui::Element::new(ui::ElementType::Div, None)
+                .flex()
+                .width_full()
+                .child(
+                    ui::Element::new(ui::ElementType::Div, None)
+                        .width_half()
+                        .margin_right(4)
+                        .child(tab_button(
+                            "导入配置",
+                            EVENT_TAB_IMPORT,
+                            state.current_tab == TabType::Import,
+                        )),
+                )
+                .child(ui::Element::new(ui::ElementType::Div, None).width_half()),
+        );
     root = root.child(tabs);
 
     let content = match state.current_tab {

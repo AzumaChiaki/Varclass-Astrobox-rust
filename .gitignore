@@ -2,6 +2,3 @@
 .DS_Store
 **/.DS_Store
 dist
-
-# 示例项目（不纳入版本控制）
-Daymatter-AstroBox-Plugin-2/

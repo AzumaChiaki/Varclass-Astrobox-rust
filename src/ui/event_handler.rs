@@ -12,6 +12,8 @@ pub const EVENT_ADD_COURSE: &str = "event_add_course";
 pub const EVENT_PULL_FROM_WATCH: &str = "event_pull_from_watch";
 pub const EVENT_PUSH_TO_WATCH: &str = "event_push_to_watch";
 pub const EVENT_SELECT_COURSE: &str = "event_select_course";
+pub const EVENT_DAY_PREFIX: &str = "event_day_"; // event_day_1 .. event_day_7
+pub const EVENT_COURSE_PREFIX: &str = "event_course_"; // event_course_{index}
 pub const EVENT_SAVE_EDIT: &str = "event_save_edit";
 pub const EVENT_DELETE_COURSE: &str = "event_delete_course";
 pub const EVENT_IMPORT_PASTE: &str = "event_import_paste";
@@ -109,6 +111,22 @@ fn handle_click(event_id: &str) {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             state.current_tab = TabType::Manage;
+        }
+        _ if event_id.starts_with(EVENT_DAY_PREFIX) => {
+            if let Ok(day) = event_id.trim_start_matches(EVENT_DAY_PREFIX).parse::<u8>() {
+                if (1..=7).contains(&day) {
+                    let mut state = ui_state()
+                        .write()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    state.selected_day = day;
+                    state.selected_index = None;
+                }
+            }
+        }
+        _ if event_id.starts_with(EVENT_COURSE_PREFIX) => {
+            if let Ok(idx) = event_id.trim_start_matches(EVENT_COURSE_PREFIX).parse::<usize>() {
+                fill_edit_form_by_index(idx);
+            }
         }
         EVENT_TAB_IMPORT => {
             let mut state = ui_state()
@@ -290,16 +308,6 @@ fn handle_change(event_id: &str, payload: &str) {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             state.import_format = ImportFormat::from_str(&value);
-        }
-        EVENT_SELECT_COURSE => {
-            let idx_opt = value
-                .split_whitespace()
-                .next()
-                .and_then(|v| v.parse::<usize>().ok())
-                .and_then(|v| v.checked_sub(1));
-            if let Some(idx) = idx_opt {
-                fill_edit_form_by_index(idx);
-            }
         }
         _ => {}
     }

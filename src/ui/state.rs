@@ -51,6 +51,7 @@ pub struct UiState {
     pub add_form: CourseForm,
     pub edit_form: CourseForm,
     pub selected_index: Option<usize>,
+    pub selected_day: u8, // 1-7 课程管理当前查看的星期
     pub import_text: String,
     pub import_format: ImportFormat,
     pub message: Option<(String, bool)>,
@@ -78,6 +79,7 @@ impl Default for UiState {
                 week_type: "all".to_string(),
             },
             selected_index: None,
+            selected_day: 1,
             import_text: String::new(),
             import_format: ImportFormat::Json,
             message: None,

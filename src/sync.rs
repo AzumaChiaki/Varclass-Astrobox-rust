@@ -42,6 +42,7 @@ pub struct SyncSnapshot {
 struct SyncState {
     cached_courses: Vec<Course>,
     cached_ab_tag: Option<AbTagForApply>,
+    cached_vela_version: Option<(String, u32)>, // (versionName, versionCode) 来自手表 interconnect 回包
     status: String,
     last_device_addr: Option<String>,
     subscribed: bool,
@@ -296,7 +297,7 @@ pub async fn request_timetable_from_device() -> Result<(), String> {
 
 /// 在 `on_event` 里处理 interconnect 消息：只更新内存缓存，不写文件。
 pub fn handle_interconnect_message(payload: &str) -> Result<InterconnectResult, String> {
-    let (mut courses, ab_tag) =
+    let (mut courses, ab_tag, vela_version) =
         parse_timetable_data(payload).ok_or_else(|| {
             let mut brief = payload.replace('\n', " ");
             if brief.len() > 220 {
@@ -311,6 +312,7 @@ pub fn handle_interconnect_message(payload: &str) -> Result<InterconnectResult, 
     with_state(|state| {
         state.cached_courses = courses.clone();
         state.cached_ab_tag = ab_tag.clone();
+        state.cached_vela_version = vela_version;
         state.subscribed = true;
         state.status = format!("已从手表同步 {} 节课程", state.cached_courses.len());
     });
@@ -318,7 +320,12 @@ pub fn handle_interconnect_message(payload: &str) -> Result<InterconnectResult, 
     Ok(InterconnectResult { courses, ab_tag })
 }
 
-fn parse_timetable_data(payload: &str) -> Option<(Vec<Course>, Option<AbTagForApply>)> {
+/// 获取从手表 interconnect 回包中解析的 Vela 版本（versionName），若无则返回 None
+pub fn get_cached_vela_version() -> Option<String> {
+    with_state(|state| state.cached_vela_version.as_ref().map(|(name, _)| name.clone()))
+}
+
+fn parse_timetable_data(payload: &str) -> Option<(Vec<Course>, Option<AbTagForApply>, Option<(String, u32)>)> {
     let root = find_timetable_payload(payload)?;
     let obj = root.as_object()?;
 
@@ -386,6 +393,17 @@ fn parse_timetable_data(payload: &str) -> Option<(Vec<Course>, Option<AbTagForAp
         }
     }
 
+    let vela_version = obj
+        .get("versionName")
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            let vc = obj
+                .get("versionCode")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
+            (s.to_string(), vc)
+        });
+
     let ab_tag = obj.get("abTag").and_then(|tag| {
         let tag_obj = tag.as_object()?;
         let ref_date = tag_obj.get("refDate")?.as_str()?.to_string();
@@ -403,7 +421,7 @@ fn parse_timetable_data(payload: &str) -> Option<(Vec<Course>, Option<AbTagForAp
         }
     });
 
-    Some((courses, ab_tag))
+    Some((courses, ab_tag, vela_version))
 }
 
 fn find_timetable_payload(raw_payload: &str) -> Option<serde_json::Value> {
@@ -580,7 +598,7 @@ pub fn import_with_format(text: &str, format: &str) -> Result<usize, String> {
 }
 
 pub fn import_from_json(text: &str) -> Result<usize, String> {
-    if let Some((courses, ab_tag)) = parse_timetable_data(text) {
+    if let Some((courses, ab_tag, _)) = parse_timetable_data(text) {
         Ok(do_import(courses, ab_tag))
     } else {
         // Try parsing as simple array of courses if not timetableData format
