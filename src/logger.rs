@@ -1,3 +1,8 @@
+//! 日志输出
+//!
+//! 仅使用 stdout，不写入文件。WASI 插件沙箱可能无法创建 logs/ 目录，
+//! rolling::daily 会导致 panic 进而导致 "Plugin thread unexpectedly closed"。
+
 use std::io::{self, Write};
 use std::sync::OnceLock;
 
@@ -18,9 +23,6 @@ pub fn init() {
         .with_line_number(true)
         .with_writer(writer)
         .compact();
-
-    // 仅使用 stdout，不写入文件。WASI 插件沙箱可能无法创建 logs/ 目录，
-    // rolling::daily 会导致 panic 进而导致 "Plugin thread unexpectedly closed"
     let result = tracing_subscriber::registry()
         .with(console_layer)
         .try_init();

@@ -1,4 +1,6 @@
-//! WakeUp 课表格式适配器，与 Android WakeupTimetableAdapter.kt 对应
+//! WakeUp 课表格式适配器
+//!
+//! 与 Android WakeupTimetableAdapter.kt 对应，解析 5 段 JSON 结构。
 
 use crate::model::Course;
 use serde_json::Value;
@@ -14,7 +16,8 @@ fn is_valid_hhmm(value: &str) -> bool {
     (0..=23).contains(&h) && (0..=59).contains(&m)
 }
 
-/// 解析 WakeUp 节次表 JSON
+
+/// 解析 WakeUp 节次表 JSON（node -> startTime/endTime）
 fn parse_node_table(json_text: &str) -> BTreeMap<i32, (String, String)> {
     let arr: Vec<Value> = serde_json::from_str(json_text).unwrap_or_default();
     let mut out = BTreeMap::new();
@@ -36,7 +39,8 @@ fn parse_node_table(json_text: &str) -> BTreeMap<i32, (String, String)> {
     out
 }
 
-/// 解析课程元数据 JSON
+
+/// 解析课程元数据 JSON（id -> courseName）
 fn parse_course_meta(json_text: &str) -> BTreeMap<i32, String> {
     let arr: Vec<Value> = serde_json::from_str(json_text).unwrap_or_default();
     let mut out = BTreeMap::new();
@@ -56,21 +60,22 @@ fn parse_course_meta(json_text: &str) -> BTreeMap<i32, String> {
     out
 }
 
+
 /// 恢复被合并的换行（粘贴时 5 段 JSON 可能用空格分隔或连成一行）
 fn normalize_wakeup_newlines(text: &str) -> String {
     let mut s = text.trim().to_string();
-    // 先处理空格分隔的块（如 "} [" "] {"）
     s = s.replace("} [", "}\n[");
     s = s.replace("] [", "]\n[");
     s = s.replace("] {", "]\n{");
-    // 再处理紧邻的边界（无空格）
+    
     s = s.replace("][", "]\n[");
     s = s.replace("]{", "]\n{");
     s = s.replace("}[", "}\n[");
     s
 }
 
-/// 按换行分割为多段，每段为一行 JSON（WakeUp 格式：header、节次表、config、课程元数据、课程安排）
+
+/// 按换行分割为多段，每段为一行 JSON（header、节次表、config、课程元数据、课程安排）
 fn split_wakeup_blocks(text: &str) -> Vec<String> {
     let normalized = normalize_wakeup_newlines(text);
     normalized

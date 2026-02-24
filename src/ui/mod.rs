@@ -1,3 +1,5 @@
+//! UI 模块：界面构建、事件处理、状态管理
+
 pub mod build;
 pub mod device;
 pub mod event_handler;

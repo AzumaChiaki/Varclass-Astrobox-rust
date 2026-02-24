@@ -1,3 +1,7 @@
+//! UI 状态管理
+//!
+//! 维护当前标签页、表单数据、选中的课程索引等，供 build 与 event_handler 共享。
+
 use std::sync::{OnceLock, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +55,8 @@ pub struct UiState {
     pub add_form: CourseForm,
     pub edit_form: CourseForm,
     pub selected_index: Option<usize>,
-    pub selected_day: u8, // 1-7 课程管理当前查看的星期
+    /// 课程管理当前查看的星期（1-7）
+    pub selected_day: u8,
     pub import_text: String,
     pub import_format: ImportFormat,
     pub message: Option<(String, bool)>,

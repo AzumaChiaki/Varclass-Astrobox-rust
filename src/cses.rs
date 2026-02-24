@@ -1,4 +1,6 @@
-//! CSES YAML 课表格式适配器，与 Android CsesTimetableAdapter.kt 对应
+//! CSES YAML 课表格式适配器
+//!
+//! 与 Android CsesTimetableAdapter.kt 对应，解析 version=1 的 subjects/schedules 结构。
 
 use crate::model::Course;
 use serde_yaml::Value;
@@ -26,6 +28,7 @@ fn get_i64(v: &Value) -> Option<i64> {
         .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
 
+
 /// 从 YAML Value 提取字符串（兼容 08:00:00、'10:00:00' 等时间格式）
 fn value_to_str(v: &Value) -> String {
     if let Some(s) = v.as_str() {
@@ -40,10 +43,10 @@ fn value_to_str(v: &Value) -> String {
     serde_yaml::to_string(v).unwrap_or_default().trim().to_string()
 }
 
+
 /// 恢复被合并的换行（粘贴时换行可能变成空格）
 fn normalize_cses_newlines(text: &str) -> String {
     let mut s = text.trim().to_string();
-    // 粘贴时换行可能变成空格，恢复关键分隔符前的换行
     s = s.replace(" subjects:", "\nsubjects:");
     s = s.replace(" schedules:", "\nschedules:");
     s = s.replace(" - name:", "\n- name:");

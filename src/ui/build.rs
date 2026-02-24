@@ -1,3 +1,7 @@
+//! 主界面 UI 构建
+//!
+//! 负责添加课程、课程管理、导入配置三个标签页的布局与渲染。
+
 use crate::astrobox::psys_host::ui;
 use crate::model::Course;
 use crate::sync;
@@ -11,11 +15,12 @@ const TAB_FONT_SIZE: u32 = 14;
 const INPUT_HEIGHT: u32 = 48;
 const INPUT_PADDING: u32 = 12;
 const COURSE_ITEM_PADDING: u32 = 24;
-// 0.15 透明 = 85% 不透明，alpha=0.85 → D9
-const BLUE_BUTTON: &str = "#0090FF26";  // #0090FF 0.15 透明
-const GRAY_BUTTON: &str = "#2A2A2AD9";  // 灰色 0.15 透明
-const GRAY_ACTIVE: &str = "#42424226";  // 激活态灰色 0.15 透明
-const GRAY_INPUT: &str = "#2A2A2AD9";   // 输入框背景 0.15 透明
+
+// 主题色：主按钮蓝、灰色按钮、激活态、输入框背景
+const BLUE_BUTTON: &str = "#0090FF26";
+const GRAY_BUTTON: &str = "#2A2A2AD9";
+const GRAY_ACTIVE: &str = "#42424226";
+const GRAY_INPUT: &str = "#2A2A2AD9";
 
 fn msg_element(state: &UiState) -> Option<ui::Element> {
     state.message.as_ref().map(|(text, is_error)| {

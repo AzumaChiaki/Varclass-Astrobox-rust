@@ -1,12 +1,18 @@
 //! 与穿戴设备同步课表（QAIC Interconnect 协议）
+//!
+//! 通过 AstroBox 的 device、interconnect、thirdpartyapp 接口与手表上的 Var 课程表快应用通信，
+//! 实现课表拉取、推送及格式导入。
 
 use std::sync::{Mutex, OnceLock};
 
 use crate::astrobox::psys_host::{device, interconnect, register, thirdpartyapp};
 use crate::model::Course;
 
+/// 默认快应用包名（当无法从手表获取应用列表时使用）
 const DEFAULT_PKG_NAME: &str = "com.azuma.syclass";
+/// 目标应用名称关键词（用于在手表应用列表中查找）
 const TARGET_APP_NAME_KEYWORD: &str = "Var课程表";
+/// 候选包名列表（兼容历史版本）
 const CANDIDATE_PKG_NAMES: [&str; 4] = [
     "com.azuma.syclass",
     "com.azuma.varclass",
@@ -42,7 +48,8 @@ pub struct SyncSnapshot {
 struct SyncState {
     cached_courses: Vec<Course>,
     cached_ab_tag: Option<AbTagForApply>,
-    cached_vela_version: Option<(String, u32)>, // (versionName, versionCode) 来自手表 interconnect 回包
+    /// (versionName, versionCode)，来自手表 interconnect 回包
+    cached_vela_version: Option<(String, u32)>,
     status: String,
     last_device_addr: Option<String>,
     subscribed: bool,
@@ -105,6 +112,7 @@ async fn first_bootstrap_device_addr() -> Option<(String, bool)> {
     all.first().map(|d| (d.addr.clone(), false))
 }
 
+/// 从手表应用列表中解析目标快应用包名（优先匹配名称含「Var课程表」的应用）
 async fn resolve_target_pkg_name(addr: &str) -> Result<String, String> {
     let apps = thirdpartyapp::get_thirdparty_app_list(addr)
         .await
@@ -133,6 +141,7 @@ async fn resolve_target_pkg_name(addr: &str) -> Result<String, String> {
     ))
 }
 
+/// 注册 interconnect 接收；若已注册（already/exists/duplicate）则视为成功
 async fn ensure_interconnect_registered(addr: &str, pkg_name: &str) -> Result<(), String> {
     match register::register_interconnect_recv(addr, pkg_name).await {
         Ok(()) => Ok(()),
@@ -198,7 +207,7 @@ pub async fn bootstrap_if_needed() -> Result<(), String> {
     }
 }
 
-/// 推送课程到设备（pushTimetable）。
+/// 推送课程到设备（pushTimetable 协议）。
 pub async fn sync_to_device(courses: &[Course], ab_tag_json: Option<&str>) -> Result<(), String> {
     let addr = first_connected_device_addr()
         .await
@@ -268,7 +277,7 @@ pub async fn sync_cached_to_device() -> Result<(), String> {
     sync_to_device(&courses, ab_tag_json.as_deref()).await
 }
 
-/// 主动向设备请求课表（requestTimetable）。
+/// 主动向设备请求课表（requestTimetable 协议）。
 pub async fn request_timetable_from_device() -> Result<(), String> {
     let addr = first_connected_device_addr()
         .await
@@ -320,11 +329,12 @@ pub fn handle_interconnect_message(payload: &str) -> Result<InterconnectResult, 
     Ok(InterconnectResult { courses, ab_tag })
 }
 
-/// 获取从手表 interconnect 回包中解析的 Vela 版本（versionName），若无则返回 None
+/// 获取从手表 interconnect 回包中解析的 Vela 版本（versionName），若无则返回 None。
 pub fn get_cached_vela_version() -> Option<String> {
     with_state(|state| state.cached_vela_version.as_ref().map(|(name, _)| name.clone()))
 }
 
+/// 从 JSON payload 解析课表数据，支持 classes/data 字段及多种字段命名
 fn parse_timetable_data(payload: &str) -> Option<(Vec<Course>, Option<AbTagForApply>, Option<(String, u32)>)> {
     let root = find_timetable_payload(payload)?;
     let obj = root.as_object()?;
@@ -424,6 +434,7 @@ fn parse_timetable_data(payload: &str) -> Option<(Vec<Course>, Option<AbTagForAp
     Some((courses, ab_tag, vela_version))
 }
 
+/// 在嵌套 JSON 中递归查找包含课程数组的对象（兼容 payloadText、payload 等包装）
 fn find_timetable_payload(raw_payload: &str) -> Option<serde_json::Value> {
     let parsed: serde_json::Value = serde_json::from_str(raw_payload).ok()?;
     let mut stack = vec![parsed];
@@ -540,6 +551,7 @@ fn do_import(mut courses: Vec<Course>, ab_tag: Option<AbTagForApply>) -> usize {
     count
 }
 
+/// 按指定格式导入课表；格式失败时按内容特征自动尝试 CSES/WakeUp/JSON
 pub fn import_with_format(text: &str, format: &str) -> Result<usize, String> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
@@ -601,7 +613,7 @@ pub fn import_from_json(text: &str) -> Result<usize, String> {
     if let Some((courses, ab_tag, _)) = parse_timetable_data(text) {
         Ok(do_import(courses, ab_tag))
     } else {
-        // Try parsing as simple array of courses if not timetableData format
+        // 尝试解析为简单课程数组（非 timetableData 格式）
         if let Ok(courses_arr) = serde_json::from_str::<Vec<Course>>(text) {
             Ok(do_import(courses_arr, None))
         } else {

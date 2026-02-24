@@ -1,4 +1,6 @@
-//! 课程模型，与 Android Course.kt 对应
+//! 课程模型
+//!
+//! 与 Android 端 Course.kt 对应，支持 JSON 序列化及名称/教室拆分。
 
 use serde::{Deserialize, Serialize};
 

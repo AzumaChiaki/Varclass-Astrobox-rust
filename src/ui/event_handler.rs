@@ -1,3 +1,7 @@
+//! UI 事件处理
+//!
+//! 将宿主派发的点击、输入等事件路由到对应的业务逻辑（添加/编辑/删除课程、同步、导入等）。
+
 use crate::astrobox::psys_host::ui;
 use crate::model::Course;
 use crate::sync;
@@ -12,8 +16,10 @@ pub const EVENT_ADD_COURSE: &str = "event_add_course";
 pub const EVENT_PULL_FROM_WATCH: &str = "event_pull_from_watch";
 pub const EVENT_PUSH_TO_WATCH: &str = "event_push_to_watch";
 pub const EVENT_SELECT_COURSE: &str = "event_select_course";
-pub const EVENT_DAY_PREFIX: &str = "event_day_"; // event_day_1 .. event_day_7
-pub const EVENT_COURSE_PREFIX: &str = "event_course_"; // event_course_{index}
+/// 星期按钮：event_day_1 .. event_day_7
+pub const EVENT_DAY_PREFIX: &str = "event_day_";
+/// 课程项：event_course_{index}
+pub const EVENT_COURSE_PREFIX: &str = "event_course_";
 pub const EVENT_SAVE_EDIT: &str = "event_save_edit";
 pub const EVENT_DELETE_COURSE: &str = "event_delete_course";
 pub const EVENT_IMPORT_PASTE: &str = "event_import_paste";

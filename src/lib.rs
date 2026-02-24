@@ -1,3 +1,7 @@
+//! Var 课程表同步器 - AstroBox 插件入口
+//!
+//! 实现 AstroBox v2 插件接口，处理宿主事件、UI 渲染与课表同步逻辑。
+
 use wit_bindgen::FutureReader;
 use serde_json::Value;
 
@@ -21,6 +25,7 @@ wit_bindgen::generate!({
 
 struct MyPlugin;
 
+/// 从事件 payload 中提取可读文本（兼容 payloadText / payload 等字段）
 fn extract_payload_text(payload: &str) -> String {
     if let Ok(json) = serde_json::from_str::<Value>(payload) {
         if let Some(text) = json.get("payloadText").and_then(|v| v.as_str()) {
