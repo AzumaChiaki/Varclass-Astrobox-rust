@@ -564,6 +564,10 @@ pub fn import_with_format(text: &str, format: &str) -> Result<usize, String> {
                 let courses = crate::cses::import_from_cses(trimmed)?;
                 Ok(do_import(courses, None))
             }
+            "class_island" => {
+                let courses = crate::class_island::import_from_class_island(trimmed)?;
+                Ok(do_import(courses, None))
+            }
             "wakeup" => {
                 let courses = crate::wakeup::import_from_wakeup(trimmed)?;
                 Ok(do_import(courses, None))
@@ -606,7 +610,7 @@ pub fn import_with_format(text: &str, format: &str) -> Result<usize, String> {
         }
     }
 
-    Err("无法解析：请确认格式选择正确（JSON/CSES/WakeUp），或检查内容是否完整".to_string())
+    Err("无法解析：请确认格式选择正确（JSON/CSES/Class Island/WakeUp），或检查内容是否完整".to_string())
 }
 
 pub fn import_from_json(text: &str) -> Result<usize, String> {

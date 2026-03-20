@@ -15,6 +15,7 @@ pub enum TabType {
 pub enum ImportFormat {
     Json,
     Cses,
+    ClassIsland,
     Wakeup,
 }
 
@@ -23,12 +24,15 @@ impl ImportFormat {
         match self {
             ImportFormat::Json => "json",
             ImportFormat::Cses => "cses",
+            ImportFormat::ClassIsland => "class_island",
             ImportFormat::Wakeup => "wakeup",
         }
     }
     pub fn from_str(s: &str) -> Self {
         let s = s.trim().to_lowercase();
-        if s.contains("cses") {
+        if s.contains("class island") || s.contains("class_island") || s.contains("classisland") {
+            ImportFormat::ClassIsland
+        } else if s.contains("cses") {
             ImportFormat::Cses
         } else if s.contains("wakeup") {
             ImportFormat::Wakeup

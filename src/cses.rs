@@ -28,6 +28,15 @@ fn get_i64(v: &Value) -> Option<i64> {
         .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
 
+/// Class Island / CSES `weeks` → 内部 week_type（odd→a, even→b）
+fn weeks_to_course_week_type(weeks: &str) -> String {
+    match weeks.trim().to_lowercase().as_str() {
+        "odd" | "奇" => Course::WEEK_A.to_string(),
+        "even" | "偶" => Course::WEEK_B.to_string(),
+        _ => Course::WEEK_ALL.to_string(),
+    }
+}
+
 
 /// 从 YAML Value 提取字符串（兼容 08:00:00、'10:00:00' 等时间格式）
 fn value_to_str(v: &Value) -> String {
@@ -54,6 +63,8 @@ fn normalize_cses_newlines(text: &str) -> String {
     s = s.replace(" - subject:", "\n  - subject:");
     s = s.replace("   enable_day:", "\n  enable_day:");
     s = s.replace("   weeks:", "\n  weeks:");
+    s = s.replace(" simplified_name:", "\n  simplified_name:");
+    s = s.replace(" teacher:", "\n  teacher:");
     s = s.replace("   classes:", "\n  classes:");
     s = s.replace("     start_time:", "\n    start_time:");
     s = s.replace("     end_time:", "\n    end_time:");
@@ -73,7 +84,7 @@ pub fn import_from_cses(yaml_text: &str) -> Result<Vec<Course>, String> {
         .get(&Value::String("version".into()))
         .and_then(get_i64);
     if version != Some(1) {
-        return Err("CSES 格式需 version=1".to_string());
+        return Err("YAML 课表需 version=1（CSES / Class Island）".to_string());
     }
 
     let mut subject_index: BTreeMap<String, (String, String)> = BTreeMap::new();
@@ -118,6 +129,11 @@ pub fn import_from_cses(yaml_text: &str) -> Result<Vec<Course>, String> {
                     if day < 1 || day > 7 {
                         continue;
                     }
+                    let week_type = schedule
+                        .get(&Value::String("weeks".into()))
+                        .map(|v| value_to_str(v).to_lowercase())
+                        .map(|w| weeks_to_course_week_type(&w))
+                        .unwrap_or_else(|| Course::WEEK_ALL.to_string());
                     if let Some(classes) = schedule
                         .get(&Value::String("classes".into()))
                         .and_then(|v| v.as_sequence())
@@ -159,7 +175,7 @@ pub fn import_from_cses(yaml_text: &str) -> Result<Vec<Course>, String> {
                                     start,
                                     end,
                                     room,
-                                    week_type: Course::WEEK_ALL.to_string(),
+                                    week_type: week_type.clone(),
                                 });
                             }
                         }

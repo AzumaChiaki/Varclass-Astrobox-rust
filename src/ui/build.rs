@@ -275,6 +275,7 @@ fn import_format_select(state: &UiState) -> ui::Element {
     let format_label = match state.import_format {
         ImportFormat::Json => "JSON",
         ImportFormat::Cses => "CSES (YAML)",
+        ImportFormat::ClassIsland => "Class Island (YAML)",
         ImportFormat::Wakeup => "WakeUp",
     };
     let mut sel = ui::Element::new(ui::ElementType::Select, Some(format_label))
@@ -287,6 +288,7 @@ fn import_format_select(state: &UiState) -> ui::Element {
         .margin_bottom(10);
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("JSON")));
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("CSES (YAML)")));
+    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("Class Island (YAML)")));
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("WakeUp")));
     sel
 }
@@ -295,6 +297,7 @@ fn import_tab_ui(state: &UiState) -> ui::Element {
     let hint = match state.import_format {
         ImportFormat::Json => "粘贴 JSON 课程配置后导入",
         ImportFormat::Cses => "粘贴 CSES YAML 课表后导入",
+        ImportFormat::ClassIsland => "粘贴 Class Island YAML（与 CSES 兼容，支持 weeks: odd/even）",
         ImportFormat::Wakeup => "粘贴 WakeUp 多段 JSON 文本后导入",
     };
     ui::Element::new(ui::ElementType::Div, None)

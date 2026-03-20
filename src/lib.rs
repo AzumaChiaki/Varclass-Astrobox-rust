@@ -10,6 +10,7 @@ use crate::exports::astrobox::psys_plugin::{
     lifecycle,
 };
 
+pub mod class_island;
 pub mod cses;
 pub mod logger;
 pub mod model;
