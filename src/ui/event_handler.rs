@@ -30,6 +30,7 @@ pub const INPUT_ADD_ROOM: &str = "input_add_room";
 pub const INPUT_ADD_START: &str = "input_add_start";
 pub const INPUT_ADD_END: &str = "input_add_end";
 pub const INPUT_ADD_WEEK_TYPE: &str = "input_add_week_type";
+pub const INPUT_ADD_WEEKS: &str = "input_add_weeks";
 
 pub const INPUT_EDIT_DAY: &str = "input_edit_day";
 pub const INPUT_EDIT_NAME: &str = "input_edit_name";
@@ -37,6 +38,7 @@ pub const INPUT_EDIT_ROOM: &str = "input_edit_room";
 pub const INPUT_EDIT_START: &str = "input_edit_start";
 pub const INPUT_EDIT_END: &str = "input_edit_end";
 pub const INPUT_EDIT_WEEK_TYPE: &str = "input_edit_week_type";
+pub const INPUT_EDIT_WEEKS: &str = "input_edit_weeks";
 
 pub const INPUT_IMPORT_TEXT: &str = "input_import_text";
 pub const INPUT_IMPORT_FORMAT: &str = "input_import_format";
@@ -68,6 +70,36 @@ fn resolve_event_id(event_id: &str, payload: &str) -> String {
     String::new()
 }
 
+/// 解析周数字符串，支持 "1,2,3" 和 "1-3,5-9" 格式
+fn parse_weeks_string(s: &str) -> Vec<u32> {
+    let mut weeks = Vec::new();
+    for part in s.split(',') {
+        let part = part.trim();
+        if part.contains('-') {
+            let range: Vec<&str> = part.split('-').collect();
+            if range.len() == 2 {
+                if let (Ok(start), Ok(end)) = (
+                    range[0].trim().parse::<u32>(),
+                    range[1].trim().parse::<u32>(),
+                ) {
+                    for w in start..=end {
+                        if w > 0 {
+                            weeks.push(w);
+                        }
+                    }
+                }
+            }
+        } else if let Ok(w) = part.parse::<u32>() {
+            if w > 0 {
+                weeks.push(w);
+            }
+        }
+    }
+    weeks.sort();
+    weeks.dedup();
+    weeks
+}
+
 fn parse_form(form: &CourseForm) -> Result<Course, String> {
     let day: u8 = form
         .day
@@ -86,6 +118,7 @@ fn parse_form(form: &CourseForm) -> Result<Course, String> {
     if start.is_empty() || end.is_empty() {
         return Err("开始/结束节次不能为空".to_string());
     }
+    let weeks = parse_weeks_string(&form.weeks);
 
     Ok(Course {
         day,
@@ -94,6 +127,7 @@ fn parse_form(form: &CourseForm) -> Result<Course, String> {
         start,
         end,
         week_type: Course::normalize_week_type(Some(form.week_type.as_str())),
+        weeks,
     })
 }
 
@@ -130,7 +164,10 @@ fn handle_click(event_id: &str) {
             }
         }
         _ if event_id.starts_with(EVENT_COURSE_PREFIX) => {
-            if let Ok(idx) = event_id.trim_start_matches(EVENT_COURSE_PREFIX).parse::<usize>() {
+            if let Ok(idx) = event_id
+                .trim_start_matches(EVENT_COURSE_PREFIX)
+                .parse::<usize>()
+            {
                 fill_edit_form_by_index(idx);
             }
         }
@@ -169,7 +206,7 @@ fn handle_click(event_id: &str) {
             refresh_main_ui();
             let ret = wit_bindgen::block_on(async { sync::sync_cached_to_device().await });
             match ret {
-                Ok(_) => set_status_message("推送成功".to_string(), false),
+                Ok(_) => set_status_message(sync::snapshot().status, false),
                 Err(e) => set_status_message(format!("推送失败: {}", e), true),
             }
         }
@@ -267,6 +304,12 @@ fn handle_change(event_id: &str, payload: &str) {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             state.add_form.week_type = value;
         }
+        INPUT_ADD_WEEKS => {
+            let mut state = ui_state()
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.add_form.weeks = value;
+        }
         INPUT_EDIT_DAY => {
             let mut state = ui_state()
                 .write()
@@ -302,6 +345,12 @@ fn handle_change(event_id: &str, payload: &str) {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             state.edit_form.week_type = value;
+        }
+        INPUT_EDIT_WEEKS => {
+            let mut state = ui_state()
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.edit_form.weeks = value;
         }
         INPUT_IMPORT_TEXT => {
             let mut state = ui_state()

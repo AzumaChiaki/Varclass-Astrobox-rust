@@ -2,8 +2,8 @@
 //!
 //! 实现 AstroBox v2 插件接口，处理宿主事件、UI 渲染与课表同步逻辑。
 
-use wit_bindgen::FutureReader;
 use serde_json::Value;
+use wit_bindgen::FutureReader;
 
 use crate::exports::astrobox::psys_plugin::{
     event::{self, EventType},
@@ -12,6 +12,7 @@ use crate::exports::astrobox::psys_plugin::{
 
 pub mod class_island;
 pub mod cses;
+pub mod ics;
 pub mod logger;
 pub mod model;
 pub mod sync;
@@ -42,23 +43,55 @@ fn extract_payload_text(payload: &str) -> String {
     payload.to_string()
 }
 
+fn flush_pending_outgoing_send_to_ui() {
+    let result = wit_bindgen::block_on(async { sync::flush_pending_outgoing_send().await });
+    if let Some(sync::InterconnectHandleResult::Control { message, is_error }) = result {
+        if !message.is_empty() {
+            ui::set_status_message(message, is_error);
+        }
+        ui::refresh_main_ui();
+    }
+}
+
 impl event::Guest for MyPlugin {
     fn on_event(event_type: EventType, event_payload: _rt::String) -> FutureReader<String> {
         let (writer, reader) = wit_future::new::<String>(|| "".to_string());
 
         match event_type {
             EventType::InterconnectMessage => {
-                if let Err(e) = sync::handle_interconnect_message(&event_payload) {
-                    logger::warn(format!("handle_interconnect_message error: {}", e));
-                    ui::set_status_message(format!("接收手环课程失败: {}", e), true);
-                    ui::refresh_main_ui();
-                } else {
-                    ui::set_status_message("已获取手环课程，可在“课程管理”中预览和编辑".to_string(), false);
-                    ui::refresh_main_ui();
+                match sync::handle_interconnect_message(&event_payload) {
+                    Ok(sync::InterconnectHandleResult::Timetable(_)) => {
+                        ui::set_status_message(
+                            "已获取手环课程，可在“课程管理”中预览和编辑".to_string(),
+                            false,
+                        );
+                        ui::refresh_main_ui();
+                    }
+                    Ok(sync::InterconnectHandleResult::Control { message, is_error }) => {
+                        if !message.is_empty() {
+                            ui::set_status_message(message, is_error);
+                        }
+                        ui::refresh_main_ui();
+                    }
+                    Err(e) => {
+                        logger::warn(format!("handle_interconnect_message error: {}", e));
+                        ui::set_status_message(format!("接收手环课程失败: {}", e), true);
+                        ui::refresh_main_ui();
+                    }
                 }
+                flush_pending_outgoing_send_to_ui();
             }
             EventType::Timer => {
                 let payload = extract_payload_text(&event_payload);
+                if let Some(sync::InterconnectHandleResult::Control { message, is_error }) =
+                    sync::handle_timer_event(&payload)
+                {
+                    if !message.is_empty() {
+                        ui::set_status_message(message, is_error);
+                    }
+                    ui::refresh_main_ui();
+                }
+                flush_pending_outgoing_send_to_ui();
                 logger::info(format!("timer event payload={}", payload));
             }
             _ => {}

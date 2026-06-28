@@ -78,7 +78,40 @@ fn action_button(label: &str, event_id: &str, primary: bool) -> ui::Element {
         )
 }
 
+/// 将周数列表格式化为区间输入格式，如 [1,2,3,5,7,9] -> "1-3,5,7,9"
+fn format_weeks_input(weeks: &[u32]) -> String {
+    if weeks.is_empty() {
+        return String::new();
+    }
+    let mut sorted: Vec<u32> = weeks.to_vec();
+    sorted.sort();
+    sorted.dedup();
+    let mut parts = Vec::new();
+    let mut start = sorted[0];
+    let mut end = start;
+    for &w in &sorted[1..] {
+        if w == end + 1 {
+            end = w;
+        } else {
+            if start == end {
+                parts.push(format!("{}", start));
+            } else {
+                parts.push(format!("{}-{}", start, end));
+            }
+            start = w;
+            end = w;
+        }
+    }
+    if start == end {
+        parts.push(format!("{}", start));
+    } else {
+        parts.push(format!("{}-{}", start, end));
+    }
+    parts.join(",")
+}
+
 fn form_from_course(course: &Course) -> CourseForm {
+    let weeks_str = format_weeks_input(&course.weeks);
     CourseForm {
         day: course.day.to_string(),
         name: course.name.clone(),
@@ -86,6 +119,7 @@ fn form_from_course(course: &Course) -> CourseForm {
         start: course.start.clone(),
         end: course.end.clone(),
         week_type: course.week_type.clone(),
+        weeks: weeks_str,
     }
 }
 
@@ -95,12 +129,21 @@ fn add_tab_ui(state: &UiState) -> ui::Element {
         .child(form_input("星期(1-7)", &state.add_form.day, INPUT_ADD_DAY))
         .child(form_input("课程名", &state.add_form.name, INPUT_ADD_NAME))
         .child(form_input("教室", &state.add_form.room, INPUT_ADD_ROOM))
-        .child(form_input("开始节次", &state.add_form.start, INPUT_ADD_START))
+        .child(form_input(
+            "开始节次",
+            &state.add_form.start,
+            INPUT_ADD_START,
+        ))
         .child(form_input("结束节次", &state.add_form.end, INPUT_ADD_END))
         .child(form_input(
             "周类型(all/a/b)",
             &state.add_form.week_type,
             INPUT_ADD_WEEK_TYPE,
+        ))
+        .child(form_input(
+            "具体周数(如1,2,3或1-3,5-9，留空使用周类型)",
+            &state.add_form.weeks,
+            INPUT_ADD_WEEKS,
         ))
         .child(
             ui::Element::new(ui::ElementType::Div, None)
@@ -113,7 +156,9 @@ fn add_tab_ui(state: &UiState) -> ui::Element {
 const DAY_NAMES: [&str; 7] = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
 fn day_button(day: u8, active: bool) -> ui::Element {
-    let label = DAY_NAMES.get((day as usize).saturating_sub(1)).unwrap_or(&"");
+    let label = DAY_NAMES
+        .get((day as usize).saturating_sub(1))
+        .unwrap_or(&"");
     let event_id = format!("{}{}", crate::ui::event_handler::EVENT_DAY_PREFIX, day);
     ui::Element::new(ui::ElementType::Button, Some(label))
         .width_full()
@@ -127,14 +172,33 @@ fn day_button(day: u8, active: bool) -> ui::Element {
 
 fn course_list_item(course: &Course, index: usize, is_selected: bool) -> ui::Element {
     let event_id = format!("{}{}", crate::ui::event_handler::EVENT_COURSE_PREFIX, index);
-    let text = format!("{} {}-{}节", course.display_name(), course.start, course.end);
+    let week_info = if course.weeks.is_empty() {
+        match course.week_type.as_str() {
+            "a" => " A周".to_string(),
+            "b" => " B周".to_string(),
+            _ => String::new(),
+        }
+    } else {
+        format!(" {}", Course::format_weeks(&course.weeks))
+    };
+    let text = format!(
+        "{} {}-{}节{}",
+        course.display_name(),
+        course.start,
+        course.end,
+        week_info
+    );
     ui::Element::new(ui::ElementType::Button, Some(&text))
         .width_full()
         .padding(COURSE_ITEM_PADDING)
         .margin_bottom(8)
         .radius(RADIUS)
         .size(15)
-        .bg(if is_selected { GRAY_ACTIVE } else { GRAY_BUTTON })
+        .bg(if is_selected {
+            GRAY_ACTIVE
+        } else {
+            GRAY_BUTTON
+        })
         .on(ui::Event::Click, &event_id)
         .on(ui::Event::PointerUp, &event_id)
 }
@@ -252,15 +316,28 @@ fn manage_tab_ui(state: &UiState) -> ui::Element {
         .child(day_buttons)
         .child(list);
 
-    root = root.child(form_input("星期(1-7)", &state.edit_form.day, INPUT_EDIT_DAY));
+    root = root.child(form_input(
+        "星期(1-7)",
+        &state.edit_form.day,
+        INPUT_EDIT_DAY,
+    ));
     root = root.child(form_input("课程名", &state.edit_form.name, INPUT_EDIT_NAME));
     root = root.child(form_input("教室", &state.edit_form.room, INPUT_EDIT_ROOM));
-    root = root.child(form_input("开始节次", &state.edit_form.start, INPUT_EDIT_START));
+    root = root.child(form_input(
+        "开始节次",
+        &state.edit_form.start,
+        INPUT_EDIT_START,
+    ));
     root = root.child(form_input("结束节次", &state.edit_form.end, INPUT_EDIT_END));
     root = root.child(form_input(
         "周类型(all/a/b)",
         &state.edit_form.week_type,
         INPUT_EDIT_WEEK_TYPE,
+    ));
+    root = root.child(form_input(
+        "具体周数(如1,2,3或1-3,5-9，留空使用周类型)",
+        &state.edit_form.weeks,
+        INPUT_EDIT_WEEKS,
     ));
 
     root.child(
@@ -277,9 +354,13 @@ fn import_format_select(state: &UiState) -> ui::Element {
         ImportFormat::Cses => "CSES (YAML)",
         ImportFormat::ClassIsland => "Class Island (YAML)",
         ImportFormat::Wakeup => "WakeUp",
+        ImportFormat::Ics => "iCalendar (.ics)",
     };
     let mut sel = ui::Element::new(ui::ElementType::Select, Some(format_label))
-        .on(ui::Event::Change, crate::ui::event_handler::INPUT_IMPORT_FORMAT)
+        .on(
+            ui::Event::Change,
+            crate::ui::event_handler::INPUT_IMPORT_FORMAT,
+        )
         .width_full()
         .height(INPUT_HEIGHT)
         .bg(GRAY_INPUT)
@@ -287,9 +368,19 @@ fn import_format_select(state: &UiState) -> ui::Element {
         .padding(INPUT_PADDING)
         .margin_bottom(10);
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("JSON")));
-    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("CSES (YAML)")));
-    sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("Class Island (YAML)")));
+    sel = sel.child(ui::Element::new(
+        ui::ElementType::Option,
+        Some("CSES (YAML)"),
+    ));
+    sel = sel.child(ui::Element::new(
+        ui::ElementType::Option,
+        Some("Class Island (YAML)"),
+    ));
     sel = sel.child(ui::Element::new(ui::ElementType::Option, Some("WakeUp")));
+    sel = sel.child(ui::Element::new(
+        ui::ElementType::Option,
+        Some("iCalendar (.ics)"),
+    ));
     sel
 }
 
@@ -299,6 +390,7 @@ fn import_tab_ui(state: &UiState) -> ui::Element {
         ImportFormat::Cses => "粘贴 CSES YAML 课表后导入",
         ImportFormat::ClassIsland => "粘贴 Class Island YAML（与 CSES 兼容，支持 weeks: odd/even）",
         ImportFormat::Wakeup => "粘贴 WakeUp 多段 JSON 文本后导入",
+        ImportFormat::Ics => "粘贴 iCalendar / .ics 日历文本后导入",
     };
     ui::Element::new(ui::ElementType::Div, None)
         .width_full()

@@ -17,6 +17,7 @@ pub enum ImportFormat {
     Cses,
     ClassIsland,
     Wakeup,
+    Ics,
 }
 
 impl ImportFormat {
@@ -26,6 +27,7 @@ impl ImportFormat {
             ImportFormat::Cses => "cses",
             ImportFormat::ClassIsland => "class_island",
             ImportFormat::Wakeup => "wakeup",
+            ImportFormat::Ics => "ics",
         }
     }
     pub fn from_str(s: &str) -> Self {
@@ -36,6 +38,8 @@ impl ImportFormat {
             ImportFormat::Cses
         } else if s.contains("wakeup") {
             ImportFormat::Wakeup
+        } else if s.contains("ics") || s.contains("ical") || s.contains("calendar") {
+            ImportFormat::Ics
         } else {
             ImportFormat::Json
         }
@@ -50,6 +54,8 @@ pub struct CourseForm {
     pub start: String,
     pub end: String,
     pub week_type: String,
+    /// 周数列表，用户输入格式: "1,2,3,5,7" 或 "1-3,5,7-9"
+    pub weeks: String,
 }
 
 #[derive(Debug)]
@@ -78,6 +84,7 @@ impl Default for UiState {
                 start: "1".to_string(),
                 end: "2".to_string(),
                 week_type: "all".to_string(),
+                weeks: String::new(),
             },
             edit_form: CourseForm {
                 day: "1".to_string(),
@@ -86,6 +93,7 @@ impl Default for UiState {
                 start: "1".to_string(),
                 end: "2".to_string(),
                 week_type: "all".to_string(),
+                weeks: String::new(),
             },
             selected_index: None,
             selected_day: 1,

@@ -30,7 +30,11 @@ fn to_hhmmss(hhmm: &str) -> String {
     let v = hhmm.trim();
     let re = regex::Regex::new(r"^([01]\d|2[0-3]):([0-5]\d)$").unwrap();
     if let Some(caps) = re.captures(v) {
-        return format!("{}:{}:00", caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str());
+        return format!(
+            "{}:{}:00",
+            caps.get(1).unwrap().as_str(),
+            caps.get(2).unwrap().as_str()
+        );
     }
     let re2 = regex::Regex::new(r"^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$").unwrap();
     if let Some(caps) = re2.captures(v) {
